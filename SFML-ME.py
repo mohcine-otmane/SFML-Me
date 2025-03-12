@@ -3,10 +3,10 @@ import subprocess
 import sys
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QPushButton, QLabel,
                              QLineEdit, QMessageBox, QProgressBar, QTextEdit, QFileDialog,
-                             QStatusBar, QHBoxLayout)
+                             QStatusBar, QHBoxLayout, QComboBox)
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPalette
-
+from PyQt6.QtGui import QPalette, QDesktopServices
+from urllib.parse import urlunparse
 
 class SFMLProjectGenerator(QWidget):
     def __init__(self):
@@ -19,7 +19,7 @@ class SFMLProjectGenerator(QWidget):
 
     def initUI(self):
         self.setWindowTitle("SFML-ME")
-        self.setGeometry(100, 100, 500, 450) # Slightly taller to accommodate status bar
+        self.setGeometry(100, 100, 500, 500) # Increased height
 
         # Inherit system theme
         self.setStyle(QApplication.style())
@@ -39,6 +39,23 @@ class SFMLProjectGenerator(QWidget):
         project_input_layout.addWidget(self.label_dir)
 
         main_layout.addLayout(project_input_layout)
+
+        # SFML Version Selection (New Feature)
+        self.sfml_version_label = QLabel("SFML Version:")
+        main_layout.addWidget(self.sfml_version_label)
+        self.sfml_version_combo = QComboBox()
+        self.sfml_version_combo.addItems(["2.5", "2.6"])  # Add supported versions
+        self.sfml_version_combo.setCurrentText("2.5")
+        main_layout.addWidget(self.sfml_version_combo)
+
+        # Build Type Selection (New Feature)
+        self.build_type_label = QLabel("Build Type:")
+        main_layout.addWidget(self.build_type_label)
+        self.build_type_combo = QComboBox()
+        self.build_type_combo.addItems(["Debug", "Release", "RelWithDebInfo", "MinSizeRel"])
+        self.build_type_combo.setCurrentText("Release")
+        main_layout.addWidget(self.build_type_combo)
+
 
         # Log Output Area
         self.log_output = QTextEdit()
@@ -86,13 +103,20 @@ class SFMLProjectGenerator(QWidget):
         main_layout.addLayout(buttons_layout)
 
 
-        # .gitignore Checkbox (New Feature)
+        # .gitignore Checkbox
         self.create_gitignore = QPushButton("Create .gitignore")
         self.create_gitignore.setCheckable(True)
         self.create_gitignore.setChecked(True)  # Default to creating it
         main_layout.addWidget(self.create_gitignore)
 
-        # Status Bar (New Feature)
+        # Open in Editor Button (New Feature)
+        self.btn_open_editor = QPushButton("Open in VS Code")  # Or default editor
+        self.btn_open_editor.clicked.connect(self.open_in_editor)
+        self.btn_open_editor.setEnabled(False)  # Disable until project created
+        main_layout.addWidget(self.btn_open_editor)
+
+
+        # Status Bar
         self.statusbar = QStatusBar()
         main_layout.addWidget(self.statusbar)
         self.statusbar.showMessage("Ready")
@@ -125,6 +149,8 @@ class SFMLProjectGenerator(QWidget):
         self.btn_build.setEnabled(self.project_created)  # Assuming creation means it exists
         self.btn_run.setEnabled(self.project_built)
         self.btn_git.setEnabled(has_dir)  # Assuming creation means it exists
+        self.btn_open_editor.setEnabled(self.project_created) # Enable open in editor button
+
 
     def clear_log(self):
         self.log_output.clear()
@@ -166,6 +192,10 @@ build/
 """
         return self._write_file(gitignore_path, gitignore_content)
 
+    def get_cmake_minimum_required(self):
+      # You may have to update this requirement if your SFML version requires more than 3.10
+      return "3.10"
+
 
     def create_project(self):
         """Creates the SFML project structure and files."""
@@ -191,6 +221,8 @@ build/
 
 
             # Create files
+            cmake_version_required = self.get_cmake_minimum_required()
+
             files = {
                 os.path.join(project_path, "src/main.cpp"): f"""
 #include <SFML/Graphics.hpp>
@@ -241,11 +273,12 @@ void Game::render() {{
 }}
                 """,
                 os.path.join(project_path, "CMakeLists.txt"): f"""
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION {cmake_version_required})
 project({self.project_name})
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_BUILD_TYPE Release)
-find_package(SFML 2.5 COMPONENTS graphics window system REQUIRED)
+set(CMAKE_BUILD_TYPE ${{{'CMAKE_BUILD_TYPE'}}}) # Use selected build type
+set(SFML_VERSION {self.sfml_version_combo.currentText()}) # Use selected sfml version
+find_package(SFML ${{SFML_VERSION}} COMPONENTS graphics window system REQUIRED)
 include_directories(include)
 file(GLOB SOURCES "src/*.cpp")
 add_executable({self.project_name} ${{SOURCES}})
@@ -291,7 +324,8 @@ target_link_libraries({self.project_name} sfml-graphics sfml-window sfml-system)
         self.progress.setValue(25)
         try:
             self.statusbar.showMessage("Configuring build...")
-            process = subprocess.run(["cmake", ".."], cwd=build_dir, capture_output=True, text=True, check=True)
+            cmake_command = ["cmake", "..", f"-DCMAKE_BUILD_TYPE={self.build_type_combo.currentText()}"] # Pass build type
+            process = subprocess.run(cmake_command, cwd=build_dir, capture_output=True, text=True, check=True)
             self.log_output.append(process.stdout + process.stderr)
             self.progress.setValue(50)
 
@@ -337,6 +371,26 @@ target_link_libraries({self.project_name} sfml-graphics sfml-window sfml-system)
             QMessageBox.critical(self, "Error", f"Running project failed!  Error: {e.stderr}")
             self.log_output.append(e.stdout + e.stderr)
             self.statusbar.showMessage(f"Running project failed: {e.stderr}")
+
+    def open_in_editor(self):
+        """Opens the project directory in VS Code (or another editor)."""
+        if not self.project_directory or not self.project_name:
+            QMessageBox.critical(self, "Error", "Project directory or name not set.")
+            self.statusbar.showMessage("Project directory or name not set.")
+            return
+
+        project_path = os.path.join(self.project_directory, self.project_name)
+        editor_command = ["code", project_path]  # VS Code command (can be customized)
+
+        try:
+            subprocess.run(editor_command, check=True)
+            self.statusbar.showMessage(f"Opened project in VS Code.")
+        except FileNotFoundError:
+            QMessageBox.warning(self, "Warning", "VS Code not found. Make sure it's installed and in your PATH.")
+            self.statusbar.showMessage("VS Code not found.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error opening in editor: {e}")
+            self.statusbar.showMessage(f"Error opening in editor: {e}")
 
 
     def create_git_repo(self):
