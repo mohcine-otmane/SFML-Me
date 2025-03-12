@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit, QMessageBox, QProgressBar
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit, QMessageBox, QProgressBar, QTextEdit, QFileDialog
 import subprocess
 import os
 import sys
@@ -6,6 +6,7 @@ import sys
 class SFMLProjectGenerator(QWidget):
     def __init__(self):
         super().__init__()
+        self.project_directory = ""
         self.initUI()
 
     def initUI(self):
@@ -20,12 +21,17 @@ class SFMLProjectGenerator(QWidget):
         self.entry = QLineEdit()
         layout.addWidget(self.entry)
 
+        self.log_output = QTextEdit()
+        self.log_output.setReadOnly(True)
+        layout.addWidget(self.log_output)
+
         self.progress = QProgressBar()
         self.progress.setValue(0)
         self.progress.setVisible(False)
         layout.addWidget(self.progress)
 
         buttons = [
+            ("Select Directory", self.select_directory),
             ("Create Project", self.create_project),
             ("Build Project", self.build_project),
             ("Run Project", self.run_project),
@@ -39,18 +45,31 @@ class SFMLProjectGenerator(QWidget):
 
         self.setLayout(layout)
 
+    def select_directory(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select Project Directory")
+        if directory:
+            self.project_directory = directory
+            self.log_output.append(f"Selected directory: {directory}")
+        else:
+            QMessageBox.warning(self, "Warning", "No directory selected!")
+
     def create_project(self):
         project_name = self.entry.text().strip()
         if not project_name:
             QMessageBox.critical(self, "Error", "Project name cannot be empty!")
             return
+        
+        if not self.project_directory:
+            QMessageBox.critical(self, "Error", "No directory selected!")
+            return
 
+        project_path = os.path.join(self.project_directory, project_name)
         directories = ["src", "include", "assets", "build"]
         for directory in directories:
-            os.makedirs(f"{project_name}/{directory}", exist_ok=True)
+            os.makedirs(os.path.join(project_path, directory), exist_ok=True)
 
         files = {
-            f"{project_name}/src/main.cpp": f"""
+            os.path.join(project_path, "src/main.cpp"): f"""
 #include <SFML/Graphics.hpp>
 #include "Game.h"
 int main() {{
@@ -59,7 +78,7 @@ int main() {{
     return 0;
 }}
             """,
-            f"{project_name}/include/Game.h": f"""
+            os.path.join(project_path, "include/Game.h"): f"""
 #ifndef GAME_H
 #define GAME_H
 #include <SFML/Graphics.hpp>
@@ -75,7 +94,7 @@ private:
 }};
 #endif
             """,
-            f"{project_name}/src/Game.cpp": f"""
+            os.path.join(project_path, "src/Game.cpp"): f"""
 #include "../include/Game.h"
 Game::Game() : window(sf::VideoMode(800, 600), "{project_name}") {{}}
 void Game::run() {{
@@ -98,7 +117,7 @@ void Game::render() {{
     window.display();
 }}
             """,
-            f"{project_name}/CMakeLists.txt": f"""
+            os.path.join(project_path, "CMakeLists.txt"): f"""
 cmake_minimum_required(VERSION 3.10)
 project({project_name})
 set(CMAKE_CXX_STANDARD 17)
@@ -115,18 +134,18 @@ target_link_libraries({project_name} sfml-graphics sfml-window sfml-system)
             with open(filepath, "w") as f:
                 f.write(content.strip())
 
-        subprocess.run(["git", "init", project_name])
-        QMessageBox.information(self, "Success", f"Project '{project_name}' created successfully!")
+        subprocess.run(["git", "init", project_path])
+        self.log_output.append(f"Project '{project_name}' created successfully at {project_path}")
 
     def build_project(self):
         project_name = self.entry.text().strip()
-        if not project_name:
-            QMessageBox.critical(self, "Error", "Enter a project name first!")
+        if not project_name or not self.project_directory:
+            QMessageBox.critical(self, "Error", "Enter a project name and select a directory!")
             return
-        
-        build_dir = f"{project_name}/build"
+
+        build_dir = os.path.join(self.project_directory, project_name, "build")
         os.makedirs(build_dir, exist_ok=True)
-        
+
         self.progress.setVisible(True)
         self.progress.setValue(25)
         process = subprocess.run(["cmake", ".."], cwd=build_dir, capture_output=True, text=True)
@@ -142,35 +161,32 @@ target_link_libraries({project_name} sfml-graphics sfml-window sfml-system)
         else:
             self.progress.setValue(0)
             QMessageBox.critical(self, "Error", f"CMake configuration failed!\n\n{process.stderr}")
-        
+
         self.progress.setVisible(False)
 
     def run_project(self):
         project_name = self.entry.text().strip()
-        if not project_name:
-            QMessageBox.critical(self, "Error", "Enter a project name first!")
+        if not project_name or not self.project_directory:
+            QMessageBox.critical(self, "Error", "Enter a project name and select a directory!")
             return
-        
-        executable_path = f"./{project_name}/build/{project_name}"
+
+        executable_path = os.path.join(self.project_directory, project_name, "build", project_name)
         if not os.path.exists(executable_path):
             QMessageBox.critical(self, "Error", "Executable not found! Build the project first.")
             return
-        
+
         subprocess.run(executable_path, shell=True, executable="/bin/bash")
 
     def create_git_repo(self):
         project_name = self.entry.text().strip()
-        if not project_name:
-            QMessageBox.critical(self, "Error", "Enter a project name first!")
+        if not project_name or not self.project_directory:
+            QMessageBox.critical(self, "Error", "Enter a project name and select a directory!")
             return
-        
-        if not os.path.exists(project_name):
-            QMessageBox.critical(self, "Error", "Project does not exist. Create it first!")
-            return
-        
-        subprocess.run(["git", "init"], cwd=project_name)
-        subprocess.run(["git", "add", "."], cwd=project_name)
-        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=project_name)
+
+        project_path = os.path.join(self.project_directory, project_name)
+        subprocess.run(["git", "init"], cwd=project_path)
+        subprocess.run(["git", "add", "."], cwd=project_path)
+        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=project_path)
         QMessageBox.information(self, "Success", "Git repository initialized!")
 
 if __name__ == "__main__":
