@@ -50,7 +50,8 @@ SFML-ME/
 │-- CMakeLists.txt  # CMake configuration
 ```
 ## Preview
-![image](https://github.com/user-attachments/assets/a7fe0d4d-1636-4f09-abd1-2c8b627f7c40)
+![image](https://github.com/user-attachments/assets/0484be23-da14-4328-819e-2479c55c8077)
+
 
 
 ## Contributing
