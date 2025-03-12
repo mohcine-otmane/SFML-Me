@@ -3,7 +3,7 @@ import subprocess
 import sys
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QPushButton, QLabel,
                              QLineEdit, QMessageBox, QProgressBar, QTextEdit, QFileDialog,
-                             QStatusBar, QHBoxLayout, QComboBox)
+                             QStatusBar, QHBoxLayout, QComboBox, QGroupBox, QFormLayout)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPalette, QDesktopServices
 from urllib.parse import urlunparse
@@ -19,89 +19,123 @@ class SFMLProjectGenerator(QWidget):
 
     def initUI(self):
         self.setWindowTitle("SFML-ME")
-        self.setGeometry(100, 100, 500, 500)  # Adjusted
+        self.setGeometry(100, 100, 600, 650)  # Adjusted height
 
         # Inherit system theme
         self.setStyle(QApplication.style())
 
         main_layout = QVBoxLayout()
 
-        # Project Input
-        project_input_layout = QVBoxLayout()
-        self.label_name = QLabel("Enter SFML Project Name:")
-        project_input_layout.addWidget(self.label_name)
+        # --- Project Settings Group ---
+        project_group = QGroupBox("Project Settings")
+        project_layout = QFormLayout()  # Form layout for labels and input fields
+
+        self.label_name = QLabel("Project Name:")
         self.entry_name = QLineEdit()
         self.entry_name.textChanged.connect(self.update_project_name)
-        project_input_layout.addWidget(self.entry_name)
+        project_layout.addRow(self.label_name, self.entry_name)  # Label to left of input
 
-        self.label_dir = QLabel("No directory selected")
-        project_input_layout.addWidget(self.label_dir)
-        main_layout.addLayout(project_input_layout)
+        self.label_dir = QLabel("Project Directory:")
+        self.dir_display = QLabel("No directory selected")
+        self.select_dir_btn = QPushButton("Select")
+        self.select_dir_btn.clicked.connect(self.select_directory)
+        dir_layout = QHBoxLayout()
+        dir_layout.addWidget(self.dir_display)
+        dir_layout.addWidget(self.select_dir_btn)
+        project_layout.addRow(self.label_dir, dir_layout)
 
-        # SFML Version Selection
+        project_group.setLayout(project_layout)
+        main_layout.addWidget(project_group)
+
+        # --- Configuration Group ---
+        config_group = QGroupBox("Configuration")
+        config_layout = QFormLayout()
+
         self.sfml_version_label = QLabel("SFML Version:")
-        main_layout.addWidget(self.sfml_version_label)
         self.sfml_version_combo = QComboBox()
         self.sfml_version_combo.addItems(["2.5", "2.6"])
         self.sfml_version_combo.setCurrentText("2.5")
-        main_layout.addWidget(self.sfml_version_combo)
+        config_layout.addRow(self.sfml_version_label, self.sfml_version_combo)
 
-        # Build Type Selection
         self.build_type_label = QLabel("Build Type:")
-        main_layout.addWidget(self.build_type_label)
         self.build_type_combo = QComboBox()
         self.build_type_combo.addItems(["Debug", "Release", "RelWithDebInfo", "MinSizeRel"])
         self.build_type_combo.setCurrentText("Release")
-        main_layout.addWidget(self.build_type_combo)
+        config_layout.addRow(self.build_type_label, self.build_type_combo)
 
-        # Log Output Area
-        self.log_output = QTextEdit()
-        self.log_output.setReadOnly(True)
-        main_layout.addWidget(self.log_output)
+        config_group.setLayout(config_layout)
+        main_layout.addWidget(config_group)
 
-        # Progress Bar
+        # --- Progress Bar (moved above Actions) ---
         self.progress = QProgressBar()
         self.progress.setValue(0)
         self.progress.setVisible(False)
-        main_layout.addWidget(self.progress)
+        main_layout.addWidget(self.progress)  # Add the progress bar to the main layout BEFORE actions
 
-        # Buttons Layout
-        buttons_layout = QHBoxLayout()
-        self.btn_select_dir = QPushButton("Select Directory")
-        self.btn_select_dir.clicked.connect(self.select_directory)
-        buttons_layout.addWidget(self.btn_select_dir)
+
+        # --- Actions Group ---
+        action_group = QGroupBox("Actions")
+        action_layout = QHBoxLayout()  # hlayout
+
+
         self.btn_create = QPushButton("Create Project")
         self.btn_create.clicked.connect(self.create_project)
         self.btn_create.setEnabled(False)
-        buttons_layout.addWidget(self.btn_create)
+
         self.btn_build = QPushButton("Build Project")
         self.btn_build.clicked.connect(self.build_project)
         self.btn_build.setEnabled(False)
-        buttons_layout.addWidget(self.btn_build)
+
         self.btn_run = QPushButton("Run Project")
         self.btn_run.clicked.connect(self.run_project)
         self.btn_run.setEnabled(False)
-        buttons_layout.addWidget(self.btn_run)
+
+        action_layout.addWidget(self.btn_create)
+        action_layout.addWidget(self.btn_build)
+        action_layout.addWidget(self.btn_run)
+
+        action_group.setLayout(action_layout)
+        main_layout.addWidget(action_group)
+
+
+        # --- More Actions Group ---
+        extra_group = QGroupBox("Extra Actions")
+        extra_layout = QHBoxLayout()
+
         self.btn_git = QPushButton("Create Git Repo")
         self.btn_git.clicked.connect(self.create_git_repo)
         self.btn_git.setEnabled(False)
-        buttons_layout.addWidget(self.btn_git)
-        self.btn_clear_log = QPushButton("Clear Log")
-        self.btn_clear_log.clicked.connect(self.clear_log)
-        buttons_layout.addWidget(self.btn_clear_log)
-        main_layout.addLayout(buttons_layout)
 
-        # .gitignore Checkbox
         self.create_gitignore = QPushButton("Create .gitignore")
         self.create_gitignore.setCheckable(True)
         self.create_gitignore.setChecked(True)
-        main_layout.addWidget(self.create_gitignore)
 
-        #Open in Editor
-        self.btn_open_editor = QPushButton("Open in VS Code")  #Hard coded but default.
-        self.btn_open_editor.clicked.connect(self.open_in_editor) #hard coded but intended functionality.
+        self.btn_open_editor = QPushButton("Open in VS Code")
+        self.btn_open_editor.clicked.connect(self.open_in_editor)
         self.btn_open_editor.setEnabled(False)
-        main_layout.addWidget(self.btn_open_editor) #Set with default command regardless rather user can control.
+
+        extra_layout.addWidget(self.btn_git)
+        extra_layout.addWidget(self.create_gitignore)
+        extra_layout.addWidget(self.btn_open_editor)
+
+        extra_group.setLayout(extra_layout)
+        main_layout.addWidget(extra_group)
+
+
+        # --- Log and Clean ---
+        log_layout = QHBoxLayout()
+
+        self.log_output = QTextEdit()
+        self.log_output.setReadOnly(True)
+
+        self.btn_clear_log = QPushButton("Clear Log")
+        self.btn_clear_log.clicked.connect(self.clear_log)
+
+        log_layout.addWidget(self.log_output)
+        log_layout.addWidget(self.btn_clear_log)
+
+        main_layout.addLayout(log_layout)
+
 
         # Status Bar
         self.statusbar = QStatusBar()
@@ -192,7 +226,7 @@ target_link_libraries({self.project_name} sfml-graphics sfml-window sfml-system)
         if directory:
             self.project_directory = directory
             self.log_output.append(f"Selected directory: {directory}")
-            self.label_dir.setText(f"Selected directory: {directory}")
+            self.dir_display.setText(directory) #set label path on gui next to button
             self.update_button_states()
             self.statusbar.showMessage(f"Selected directory: {directory}")
         else:
