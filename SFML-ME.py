@@ -128,25 +128,20 @@ class SFMLProjectGenerator(QWidget):
         self.log_output.setVisible(False)  # Hide initially
         main_layout.addWidget(self.log_output)
 
-        # -- Log toggle button
-        self.toggle_log_button = QPushButton("Show Log")  # Toggle
+        # --- Log Actions (buttons) ---
+        log_action_layout = QHBoxLayout()
+
+        self.toggle_log_button = QPushButton("Show Log")
         self.toggle_log_button.clicked.connect(self.toggle_log_visibility)
-        main_layout.addWidget(self.toggle_log_button)
-
-
-        # --- Log and Clean (Removed to be put separate) ---
-        # log_layout = QHBoxLayout()
-
-        # self.log_output = QTextEdit()
-        # self.log_output.setReadOnly(True)
+        log_action_layout.addWidget(self.toggle_log_button)
 
         self.btn_clear_log = QPushButton("Clear Log")
         self.btn_clear_log.clicked.connect(self.clear_log)
-        main_layout.addWidget(self.btn_clear_log) #Put outside log area.
+        self.btn_clear_log.setVisible(False)  # Initially hide clear log
 
-        # log_layout.addWidget(self.log_output)
-        # log_layout.addWidget(self.btn_clear_log)
-        # main_layout.addLayout(log_layout)
+        log_action_layout.addWidget(self.btn_clear_log)
+        main_layout.addLayout(log_action_layout)
+
 
         # Status Bar
         self.statusbar = QStatusBar()
@@ -156,10 +151,11 @@ class SFMLProjectGenerator(QWidget):
         self.setLayout(main_layout)
 
     def toggle_log_visibility(self):
-      """Toggles the visibility of the log output."""
-      self.log_visible = not self.log_visible
-      self.log_output.setVisible(self.log_visible)
-      self.toggle_log_button.setText("Hide Log" if self.log_visible else "Show Log") #Changes text
+        """Toggles the visibility of the log output."""
+        self.log_visible = not self.log_visible
+        self.log_output.setVisible(self.log_visible)
+        self.btn_clear_log.setVisible(self.log_visible) #shows to fit your image style of requests
+        self.toggle_log_button.setText("Hide Log" if self.log_visible else "Show Log") #Changes text
 
     def _generate_main_cpp(self):
         """Generates the content for main.cpp"""
@@ -319,6 +315,21 @@ build/
     def get_cmake_minimum_required(self):
       return "3.10"
 
+    def _check_compiler(self):
+      try:
+          result = subprocess.run(["cmake", "--version"], capture_output=True, text=True, check=True)
+          cmake_version = result.stdout.splitlines()[0]
+          self.log_output.append(cmake_version)
+          self.statusbar.showMessage("CMake found.")
+          return True
+      except FileNotFoundError:
+          QMessageBox.critical(self, "Error", "CMake is not installed or not in PATH.")
+          self.statusbar.showMessage("CMake not found.")
+          return False
+      except subprocess.CalledProcessError as e:
+          QMessageBox.critical(self, "Error", f"Error running cmake --version: {e.stderr}")
+          self.statusbar.showMessage(f"Error running cmake: {e.stderr}")
+          return False
 
     def create_project(self):
         if not self.project_name:
@@ -374,43 +385,47 @@ build/
 
 
     def build_project(self):
-        project_name = self.entry_name.text().strip() #this should be gotten from `self.project_name`
-        if not project_name or not self.project_directory:
-            QMessageBox.critical(self, "Error", "Enter a project name and select a directory!")
-            self.statusbar.showMessage("Enter a project name and select a directory!")
-            return
+      """Builds the project using CMake."""
+      if not self._check_compiler():
+          return # do no work because no compiler was found...
 
-        build_dir = os.path.join(self.project_directory, project_name, "build")
-        os.makedirs(build_dir, exist_ok=True)
+      project_name = self.entry_name.text().strip()
+      if not project_name or not self.project_directory:
+          QMessageBox.critical(self, "Error", "Enter a project name and select a directory!")
+          self.statusbar.showMessage("Enter a project name and select a directory!")
+          return
 
-        self.progress.setVisible(True)
-        self.progress.setValue(25)
-        try:
-            self.statusbar.showMessage("Configuring build...")
-            cmake_command = ["cmake", "..", f"-DCMAKE_BUILD_TYPE={self.build_type_combo.currentText()}"] # Pass build type
-            process = subprocess.run(cmake_command, cwd=build_dir, capture_output=True, text=True, check=True)
-            self.log_output.append(process.stdout + process.stderr)
-            self.progress.setValue(50)
+      build_dir = os.path.join(self.project_directory, project_name, "build")
+      os.makedirs(build_dir, exist_ok=True)
 
-            self.statusbar.showMessage("Building project...")
-            process = subprocess.run(["cmake", "--build", "."], cwd=build_dir, capture_output=True, text=True, check=True)
-            self.log_output.append(process.stdout + process.stderr)
-            self.progress.setValue(100)
+      self.progress.setVisible(True)
+      self.progress.setValue(25)
+      try:
+          self.statusbar.showMessage("Configuring build...")
+          cmake_command = ["cmake", "..", f"-DCMAKE_BUILD_TYPE={self.build_type_combo.currentText()}"]
+          process = subprocess.run(cmake_command, cwd=build_dir, capture_output=True, text=True, check=True)
+          self.log_output.append(process.stdout + process.stderr)
+          self.progress.setValue(50)
 
-            QMessageBox.information(self, "Success", "Build completed successfully!")
-            self.project_built = True
-            self.update_button_states() # Enable run button after successful build
-            self.statusbar.showMessage("Build completed successfully!")
+          self.statusbar.showMessage("Building project...")
+          process = subprocess.run(["cmake", "--build", "."], cwd=build_dir, capture_output=True, text=True, check=True)
+          self.log_output.append(process.stdout + process.stderr)
+          self.progress.setValue(100)
 
-        except subprocess.CalledProcessError as e:
-            self.progress.setValue(0)
-            QMessageBox.critical(self, "Error", f"Build failed!  Error: {e.stderr}")
-            self.log_output.append(e.stdout + e.stderr)
-            self.project_built = False #ensure project is not built
-            self.update_button_states()
-            self.statusbar.showMessage(f"Build failed: {e.stderr}")
-        finally:
-            self.progress.setVisible(False)
+          QMessageBox.information(self, "Success", "Build completed successfully!")
+          self.project_built = True
+          self.update_button_states()
+          self.statusbar.showMessage("Build completed successfully!")
+
+      except subprocess.CalledProcessError as e:
+          self.progress.setValue(0)
+          QMessageBox.critical(self, "Error", f"Build failed!  Error: {e.stderr}")
+          self.log_output.append(e.stdout + e.stderr)
+          self.project_built = False
+          self.update_button_states()
+          self.statusbar.showMessage(f"Build failed: {e.stderr}")
+      finally:
+          self.progress.setVisible(False)
 
     def run_project(self):
         project_name = self.entry_name.text().strip() #this should be gotten from `self.project_name`
