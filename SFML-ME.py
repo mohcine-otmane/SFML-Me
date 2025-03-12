@@ -15,6 +15,7 @@ class SFMLProjectGenerator(QWidget):
         self.project_name = ""
         self.project_created = False
         self.project_built = False
+        self.log_visible = False  # Initially hide the log
         self.initUI()
 
     def initUI(self):
@@ -28,12 +29,12 @@ class SFMLProjectGenerator(QWidget):
 
         # --- Project Settings Group ---
         project_group = QGroupBox("Project Settings")
-        project_layout = QFormLayout()  # Form layout for labels and input fields
+        project_layout = QFormLayout()
 
         self.label_name = QLabel("Project Name:")
         self.entry_name = QLineEdit()
         self.entry_name.textChanged.connect(self.update_project_name)
-        project_layout.addRow(self.label_name, self.entry_name)  # Label to left of input
+        project_layout.addRow(self.label_name, self.entry_name)
 
         self.label_dir = QLabel("Project Directory:")
         self.dir_display = QLabel("No directory selected")
@@ -66,11 +67,11 @@ class SFMLProjectGenerator(QWidget):
         config_group.setLayout(config_layout)
         main_layout.addWidget(config_group)
 
-        # --- Progress Bar (moved above Actions) ---
+        # --- Progress Bar ---
         self.progress = QProgressBar()
         self.progress.setValue(0)
         self.progress.setVisible(False)
-        main_layout.addWidget(self.progress)  # Add the progress bar to the main layout BEFORE actions
+        main_layout.addWidget(self.progress)
 
 
         # --- Actions Group ---
@@ -121,21 +122,31 @@ class SFMLProjectGenerator(QWidget):
         extra_group.setLayout(extra_layout)
         main_layout.addWidget(extra_group)
 
-
-        # --- Log and Clean ---
-        log_layout = QHBoxLayout()
-
+        # --- Log Area (initially hidden)
         self.log_output = QTextEdit()
         self.log_output.setReadOnly(True)
+        self.log_output.setVisible(False)  # Hide initially
+        main_layout.addWidget(self.log_output)
+
+        # -- Log toggle button
+        self.toggle_log_button = QPushButton("Show Log")  # Toggle
+        self.toggle_log_button.clicked.connect(self.toggle_log_visibility)
+        main_layout.addWidget(self.toggle_log_button)
+
+
+        # --- Log and Clean (Removed to be put separate) ---
+        # log_layout = QHBoxLayout()
+
+        # self.log_output = QTextEdit()
+        # self.log_output.setReadOnly(True)
 
         self.btn_clear_log = QPushButton("Clear Log")
         self.btn_clear_log.clicked.connect(self.clear_log)
+        main_layout.addWidget(self.btn_clear_log) #Put outside log area.
 
-        log_layout.addWidget(self.log_output)
-        log_layout.addWidget(self.btn_clear_log)
-
-        main_layout.addLayout(log_layout)
-
+        # log_layout.addWidget(self.log_output)
+        # log_layout.addWidget(self.btn_clear_log)
+        # main_layout.addLayout(log_layout)
 
         # Status Bar
         self.statusbar = QStatusBar()
@@ -144,6 +155,11 @@ class SFMLProjectGenerator(QWidget):
 
         self.setLayout(main_layout)
 
+    def toggle_log_visibility(self):
+      """Toggles the visibility of the log output."""
+      self.log_visible = not self.log_visible
+      self.log_output.setVisible(self.log_visible)
+      self.toggle_log_button.setText("Hide Log" if self.log_visible else "Show Log") #Changes text
 
     def _generate_main_cpp(self):
         """Generates the content for main.cpp"""
