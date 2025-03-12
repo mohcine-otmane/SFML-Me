@@ -149,18 +149,20 @@ target_link_libraries({project_name} sfml-graphics sfml-window sfml-system)
         self.progress.setVisible(True)
         self.progress.setValue(25)
         process = subprocess.run(["cmake", ".."], cwd=build_dir, capture_output=True, text=True)
+        self.log_output.append(process.stdout + process.stderr)
         if process.returncode == 0:
             self.progress.setValue(50)
             process = subprocess.run(["cmake", "--build", "."], cwd=build_dir, capture_output=True, text=True)
+            self.log_output.append(process.stdout + process.stderr)
             if process.returncode == 0:
                 self.progress.setValue(100)
                 QMessageBox.information(self, "Success", "Build completed successfully!")
             else:
                 self.progress.setValue(0)
-                QMessageBox.critical(self, "Error", f"Build failed!\n\n{process.stderr}")
+                QMessageBox.critical(self, "Error", "Build failed!")
         else:
             self.progress.setValue(0)
-            QMessageBox.critical(self, "Error", f"CMake configuration failed!\n\n{process.stderr}")
+            QMessageBox.critical(self, "Error", "CMake configuration failed!")
 
         self.progress.setVisible(False)
 
@@ -175,19 +177,16 @@ target_link_libraries({project_name} sfml-graphics sfml-window sfml-system)
             QMessageBox.critical(self, "Error", "Executable not found! Build the project first.")
             return
 
-        subprocess.run(executable_path, shell=True, executable="/bin/bash")
+        process = subprocess.run(executable_path, capture_output=True, text=True)
+        self.log_output.append(process.stdout + process.stderr)
 
     def create_git_repo(self):
-        project_name = self.entry.text().strip()
-        if not project_name or not self.project_directory:
-            QMessageBox.critical(self, "Error", "Enter a project name and select a directory!")
+        if not self.project_directory:
+            QMessageBox.critical(self, "Error", "No directory selected!")
             return
-
-        project_path = os.path.join(self.project_directory, project_name)
-        subprocess.run(["git", "init"], cwd=project_path)
-        subprocess.run(["git", "add", "."], cwd=project_path)
-        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=project_path)
-        QMessageBox.information(self, "Success", "Git repository initialized!")
+        
+        subprocess.run(["git", "init", self.project_directory])
+        self.log_output.append("Initialized a new Git repository in " + self.project_directory)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
