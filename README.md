@@ -49,6 +49,9 @@ SFML-ME/
 │-- build/  # Compiled binaries and CMake build files
 │-- CMakeLists.txt  # CMake configuration
 ```
+## Preview
+![image](https://github.com/user-attachments/assets/a7fe0d4d-1636-4f09-abd1-2c8b627f7c40)
+
 
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss the proposed changes.
