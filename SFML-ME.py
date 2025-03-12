@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit, QMessageBox
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit, QMessageBox, QProgressBar
 import subprocess
 import os
 import sys
@@ -10,7 +10,7 @@ class SFMLProjectGenerator(QWidget):
 
     def initUI(self):
         self.setWindowTitle("SFML Project Generator")
-        self.setGeometry(100, 100, 400, 300)
+        self.setGeometry(100, 100, 500, 400)
 
         layout = QVBoxLayout()
 
@@ -20,21 +20,22 @@ class SFMLProjectGenerator(QWidget):
         self.entry = QLineEdit()
         layout.addWidget(self.entry)
 
-        self.create_btn = QPushButton("Create Project")
-        self.create_btn.clicked.connect(self.create_project)
-        layout.addWidget(self.create_btn)
+        self.progress = QProgressBar()
+        self.progress.setValue(0)
+        self.progress.setVisible(False)
+        layout.addWidget(self.progress)
 
-        self.build_btn = QPushButton("Build Project")
-        self.build_btn.clicked.connect(self.build_project)
-        layout.addWidget(self.build_btn)
+        buttons = [
+            ("Create Project", self.create_project),
+            ("Build Project", self.build_project),
+            ("Run Project", self.run_project),
+            ("Create Git Repo", self.create_git_repo)
+        ]
 
-        self.run_btn = QPushButton("Run Project")
-        self.run_btn.clicked.connect(self.run_project)
-        layout.addWidget(self.run_btn)
-
-        self.git_btn = QPushButton("Create Git Repo")
-        self.git_btn.clicked.connect(self.create_git_repo)
-        layout.addWidget(self.git_btn)
+        for text, function in buttons:
+            btn = QPushButton(text)
+            btn.clicked.connect(function)
+            layout.addWidget(btn)
 
         self.setLayout(layout)
 
@@ -44,13 +45,12 @@ class SFMLProjectGenerator(QWidget):
             QMessageBox.critical(self, "Error", "Project name cannot be empty!")
             return
 
-        os.makedirs(f"{project_name}/src", exist_ok=True)
-        os.makedirs(f"{project_name}/include", exist_ok=True)
-        os.makedirs(f"{project_name}/assets", exist_ok=True)
-        os.makedirs(f"{project_name}/build", exist_ok=True)
+        directories = ["src", "include", "assets", "build"]
+        for directory in directories:
+            os.makedirs(f"{project_name}/{directory}", exist_ok=True)
 
-        with open(f"{project_name}/src/main.cpp", "w") as f:
-            f.write(f"""
+        files = {
+            f"{project_name}/src/main.cpp": f"""
 #include <SFML/Graphics.hpp>
 #include "Game.h"
 int main() {{
@@ -58,10 +58,8 @@ int main() {{
     game.run();
     return 0;
 }}
-            """)
-
-        with open(f"{project_name}/include/Game.h", "w") as f:
-            f.write(f"""
+            """,
+            f"{project_name}/include/Game.h": f"""
 #ifndef GAME_H
 #define GAME_H
 #include <SFML/Graphics.hpp>
@@ -76,10 +74,8 @@ private:
     void render();
 }};
 #endif
-            """)
-
-        with open(f"{project_name}/src/Game.cpp", "w") as f:
-            f.write(f"""
+            """,
+            f"{project_name}/src/Game.cpp": f"""
 #include "../include/Game.h"
 Game::Game() : window(sf::VideoMode(800, 600), "{project_name}") {{}}
 void Game::run() {{
@@ -101,10 +97,8 @@ void Game::render() {{
     window.clear(sf::Color::Black);
     window.display();
 }}
-            """)
-
-        with open(f"{project_name}/CMakeLists.txt", "w") as f:
-            f.write(f"""
+            """,
+            f"{project_name}/CMakeLists.txt": f"""
 cmake_minimum_required(VERSION 3.10)
 project({project_name})
 set(CMAKE_CXX_STANDARD 17)
@@ -114,7 +108,12 @@ include_directories(include)
 file(GLOB SOURCES "src/*.cpp")
 add_executable({project_name} ${{SOURCES}})
 target_link_libraries({project_name} sfml-graphics sfml-window sfml-system)
-            """)
+            """
+        }
+
+        for filepath, content in files.items():
+            with open(filepath, "w") as f:
+                f.write(content.strip())
 
         subprocess.run(["git", "init", project_name])
         QMessageBox.information(self, "Success", f"Project '{project_name}' created successfully!")
@@ -126,18 +125,25 @@ target_link_libraries({project_name} sfml-graphics sfml-window sfml-system)
             return
         
         build_dir = f"{project_name}/build"
-        if not os.path.exists(build_dir):
-            os.makedirs(build_dir)
+        os.makedirs(build_dir, exist_ok=True)
         
+        self.progress.setVisible(True)
+        self.progress.setValue(25)
         process = subprocess.run(["cmake", ".."], cwd=build_dir, capture_output=True, text=True)
         if process.returncode == 0:
+            self.progress.setValue(50)
             process = subprocess.run(["cmake", "--build", "."], cwd=build_dir, capture_output=True, text=True)
             if process.returncode == 0:
+                self.progress.setValue(100)
                 QMessageBox.information(self, "Success", "Build completed successfully!")
             else:
+                self.progress.setValue(0)
                 QMessageBox.critical(self, "Error", f"Build failed!\n\n{process.stderr}")
         else:
+            self.progress.setValue(0)
             QMessageBox.critical(self, "Error", f"CMake configuration failed!\n\n{process.stderr}")
+        
+        self.progress.setVisible(False)
 
     def run_project(self):
         project_name = self.entry.text().strip()
@@ -172,4 +178,3 @@ if __name__ == "__main__":
     window = SFMLProjectGenerator()
     window.show()
     sys.exit(app.exec())
-
