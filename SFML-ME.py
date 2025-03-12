@@ -19,7 +19,7 @@ class SFMLProjectGenerator(QWidget):
 
     def initUI(self):
         self.setWindowTitle("SFML-ME")
-        self.setGeometry(100, 100, 500, 550)  # increased more
+        self.setGeometry(100, 100, 500, 500)  # Adjusted
 
         # Inherit system theme
         self.setStyle(QApplication.style())
@@ -53,12 +53,6 @@ class SFMLProjectGenerator(QWidget):
         self.build_type_combo.addItems(["Debug", "Release", "RelWithDebInfo", "MinSizeRel"])
         self.build_type_combo.setCurrentText("Release")
         main_layout.addWidget(self.build_type_combo)
-
-        # Editor Configuration (New Feature)
-        self.editor_label = QLabel("Editor Command:")
-        main_layout.addWidget(self.editor_label)
-        self.editor_input = QLineEdit("code") # VS Code by default
-        main_layout.addWidget(self.editor_input)
 
         # Log Output Area
         self.log_output = QTextEdit()
@@ -103,11 +97,11 @@ class SFMLProjectGenerator(QWidget):
         self.create_gitignore.setChecked(True)
         main_layout.addWidget(self.create_gitignore)
 
-        # Open in Editor Button
-        self.btn_open_editor = QPushButton("Open in Editor") # Dynamically labelled based on user input
-        self.btn_open_editor.clicked.connect(self.open_in_editor)
+        #Open in Editor
+        self.btn_open_editor = QPushButton("Open in VS Code")  #Hard coded but default.
+        self.btn_open_editor.clicked.connect(self.open_in_editor) #hard coded but intended functionality.
         self.btn_open_editor.setEnabled(False)
-        main_layout.addWidget(self.btn_open_editor)
+        main_layout.addWidget(self.btn_open_editor) #Set with default command regardless rather user can control.
 
         # Status Bar
         self.statusbar = QStatusBar()
@@ -191,7 +185,6 @@ target_link_libraries({self.project_name} sfml-graphics sfml-window sfml-system)
 
     def update_project_name(self, text):
         self.project_name = text.strip()
-        self.btn_open_editor.setText(f"Open in {self.editor_input.text()}")  # Set Label for opening custom editor name.
         self.update_button_states()
 
     def select_directory(self):
@@ -214,19 +207,18 @@ target_link_libraries({self.project_name} sfml-graphics sfml-window sfml-system)
         self.btn_run.setEnabled(self.project_built)
         self.btn_git.setEnabled(has_dir)
         self.btn_open_editor.setEnabled(self.project_created)
-        self.btn_open_editor.setText(f"Open in {self.editor_input.text()}")  #Updates Open button based on the editor name.
 
     def clear_log(self):
         self.log_output.clear()
 
     def _create_directories(self, project_path, directories):
         for directory in directories:
-            self.statusbar.showMessage(f"Creating Directory: {directory}...")  # Status Bar
+            self.statusbar.showMessage(f"Creating Directory: {directory}...")
             os.makedirs(os.path.join(project_path, directory), exist_ok=True)
 
     def _write_file(self, filepath, content):
         try:
-            self.statusbar.showMessage(f"Writing file: {filepath}...")  # Status bar update before writing.
+            self.statusbar.showMessage(f"Writing file: {filepath}...")
             with open(filepath, "w") as f:
                 f.write(content.strip())
             return True
@@ -394,21 +386,20 @@ build/
             self.statusbar.showMessage(f"Running project failed: {e.stderr}")
 
     def open_in_editor(self):
-        """Opens the project directory in User Preferred Editor."""
+        """Opens the project directory in VS Code."""
         if not self.project_directory or not self.project_name:
             QMessageBox.critical(self, "Error", "Project directory or name not set.")
             self.statusbar.showMessage("Project directory or name not set.")
             return
 
         project_path = os.path.join(self.project_directory, self.project_name)
-        editor_command = [self.editor_input.text(), project_path]  #  Preferred editor from userinput.
-
+        editor_command = ["code", project_path]  # HARDCODED vcode regardless
         try:
-            subprocess.run(editor_command, check=True)
-            self.statusbar.showMessage(f"Opened project in {self.editor_input.text()}.")
+            subprocess.run(editor_command, check=True) #Still use vscode always hardcode always
+            self.statusbar.showMessage("Opened project in VS Code.")
         except FileNotFoundError:
-            QMessageBox.warning(self, "Warning", f"{self.editor_input.text()} not found. Make sure it's installed and in your PATH.")
-            self.statusbar.showMessage(f"{self.editor_input.text()} not found.")
+            QMessageBox.warning(self, "Warning", f"VS Code not found. Make sure it's installed and in your PATH.")
+            self.statusbar.showMessage(f"VS Code is always needed!")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error opening in editor: {e}")
             self.statusbar.showMessage(f"Error opening in editor: {e}")
